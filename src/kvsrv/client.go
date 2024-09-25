@@ -1,13 +1,18 @@
 package kvsrv
 
-import "6.5840/labrpc"
-import "crypto/rand"
-import "math/big"
+import (
+	"crypto/rand"
+	"math/big"
+	"sync/atomic"
 
+	"6.5840/labrpc"
+)
 
 type Clerk struct {
-	server *labrpc.ClientEnd
-	// You will have to modify this struct.
+	server           *labrpc.ClientEnd
+	index            int64
+	nextRequestIndex atomic.Int64
+	ack              atomic.Int64
 }
 
 func nrand() int64 {
@@ -20,6 +25,11 @@ func nrand() int64 {
 func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.server = server
+	ck.index = nrand()
+	ck.nextRequestIndex = atomic.Int64{}
+	ck.nextRequestIndex.Store(-1)
+	ck.ack = atomic.Int64{}
+	ck.ack.Store(-1)
 	// You'll have to add code here.
 	return ck
 }
@@ -35,9 +45,20 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
-
-	// You will have to modify this function.
-	return ""
+	getArgs := GetArgs{
+		Key:          key,
+		ClientIndex:  ck.index,
+		RequestIndex: ck.nextRequestIndex.Add(1),
+		ACK:          ck.ack.Load(),
+	}
+	getReply := GetReply{}
+	ok := ck.server.Call("KVServer.Get", &getArgs, &getReply)
+	for !ok {
+		DPrintf("GetRPC Failed")
+		ok = ck.server.Call("KVServer.Get", &getArgs, &getReply)
+	}
+	ck.ack.Add(1)
+	return getReply.Value
 }
 
 // shared by Put and Append.
@@ -50,7 +71,21 @@ func (ck *Clerk) Get(key string) string {
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	// You will have to modify this function.
-	return ""
+	putAppendArgs := PutAppendArgs{
+		Key:          key,
+		Value:        value,
+		ClientIndex:  ck.index,
+		RequestIndex: ck.nextRequestIndex.Add(1),
+		ACK:          ck.ack.Load(),
+	}
+	putAppendReply := PutAppendReply{}
+	ok := ck.server.Call("KVServer."+op, &putAppendArgs, &putAppendReply)
+	for !ok {
+		DPrintf("PutAppend Failed")
+		ok = ck.server.Call("KVServer."+op, &putAppendArgs, &putAppendReply)
+	}
+	ck.ack.Add(1)
+	return putAppendReply.Value
 }
 
 func (ck *Clerk) Put(key string, value string) {
