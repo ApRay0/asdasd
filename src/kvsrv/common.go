@@ -4,9 +4,7 @@ package kvsrv
 type PutAppendArgs struct {
 	Key          string
 	Value        string
-	ClientIndex  int64
 	RequestIndex int64
-	ACK          int64
 }
 
 type PutAppendReply struct {
@@ -15,11 +13,16 @@ type PutAppendReply struct {
 
 type GetArgs struct {
 	Key          string
-	ClientIndex  int64
 	RequestIndex int64
-	ACK          int64
 }
 
 type GetReply struct {
 	Value string
+}
+
+type AckArgs struct {
+	RequestIndex int64
+}
+
+type AckReply struct {
 }
