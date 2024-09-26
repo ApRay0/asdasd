@@ -1,13 +1,14 @@
 package kvsrv
 
-import "6.5840/labrpc"
-import "crypto/rand"
-import "math/big"
+import (
+	"crypto/rand"
+	"math/big"
 
+	"6.5840/labrpc"
+)
 
 type Clerk struct {
 	server *labrpc.ClientEnd
-	// You will have to modify this struct.
 }
 
 func nrand() int64 {
@@ -20,7 +21,6 @@ func nrand() int64 {
 func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.server = server
-	// You'll have to add code here.
 	return ck
 }
 
@@ -35,9 +35,27 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
-
-	// You will have to modify this function.
-	return ""
+	var requestIndex = nrand()
+	getArgs := GetArgs{
+		Key:          key,
+		RequestIndex: requestIndex,
+	}
+	getReply := GetReply{}
+	ok := ck.server.Call("KVServer.Get", &getArgs, &getReply)
+	for !ok {
+		DPrintf("GetRPC Failed")
+		ok = ck.server.Call("KVServer.Get", &getArgs, &getReply)
+	}
+	ackArgs := AckArgs{
+		RequestIndex: requestIndex,
+	}
+	ackReply := AckReply{}
+	ok = ck.server.Call("KVServer.Ack", &ackArgs, &ackReply)
+	for !ok {
+		DPrintf("AckRPC Failed")
+		ok = ck.server.Call("KVServer.Ack", &ackArgs, &ackReply)
+	}
+	return getReply.Value
 }
 
 // shared by Put and Append.
@@ -49,8 +67,29 @@ func (ck *Clerk) Get(key string) string {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) PutAppend(key string, value string, op string) string {
-	// You will have to modify this function.
-	return ""
+	requestIndex := nrand()
+
+	putAppendArgs := PutAppendArgs{
+		Key:          key,
+		Value:        value,
+		RequestIndex: requestIndex,
+	}
+	putAppendReply := PutAppendReply{}
+	ok := ck.server.Call("KVServer."+op, &putAppendArgs, &putAppendReply)
+	for !ok {
+		DPrintf("PutAppend Failed")
+		ok = ck.server.Call("KVServer."+op, &putAppendArgs, &putAppendReply)
+	}
+	ackArgs := AckArgs{
+		RequestIndex: requestIndex,
+	}
+	ackReply := AckReply{}
+	ok = ck.server.Call("KVServer.Ack", &ackArgs, &ackReply)
+	for !ok {
+		DPrintf("AckRPC Failed")
+		ok = ck.server.Call("KVServer.Ack", &ackArgs, &ackReply)
+	}
+	return putAppendReply.Value
 }
 
 func (ck *Clerk) Put(key string, value string) {
