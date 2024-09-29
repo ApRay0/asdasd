@@ -55,16 +55,22 @@ func (rf *Raft) findMaxMatchIndex() int {
 			}
 		}
 		if tmpCount < (n+1)/2 {
-			return res
+			break
 		}
 		res++
 	}
-	DPrintf("-=-=-=-=-=-= FindMaxMatchIndex results : %d", res-1)
+	// DPrintf("-=-=-=-=-=-= FindMaxMatchIndex results : %d", res-1)
 	return res - 1
 }
 
 func (rf *Raft) Min(a int, b int) int {
 	if a > b {
+		return b
+	}
+	return a
+}
+func (rf *Raft) Max(a int, b int) int {
+	if a < b {
 		return b
 	}
 	return a

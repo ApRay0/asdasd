@@ -31,14 +31,25 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.changeRole(Follower)
 		rf.voteFor = -1
 	}
-	if (rf.voteFor == -1 || rf.voteFor == args.CandidateID) &&
-		args.LastLogIndex >= len(rf.log) &&
-		args.LastLogTerm >= rf.log[len(rf.log)-1].Term {
-		DPrintf("%d Voted for %d", rf.me, args.CandidateID)
-		rf.refreshElectionTime()
-		reply.VoteGranted = true
-		rf.voteFor = args.CandidateID
+	//If the logs have last entries with different terms, then
+	// the log with the later term is more up-to-date. If the logs
+	// end with the same term, then whichever log is longer is
+	// more up-to-date.
+	if !(rf.voteFor == -1 || rf.voteFor == args.CandidateID) {
+		return
 	}
+	if args.LastLogTerm < rf.log[len(rf.log)-1].Term {
+		return
+	}
+	if args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex < len(rf.log) {
+		return
+	}
+
+	DPrintf("%d Voted for %d", rf.me, args.CandidateID)
+	rf.refreshElectionTime()
+	reply.VoteGranted = true
+	rf.voteFor = args.CandidateID
+
 }
 
 func (rf *Raft) startElection() {
@@ -68,7 +79,7 @@ func (rf *Raft) startElection() {
 			requestVoteReply := RequestVoteReply{}
 			ok := rf.sendRequestVote(index, &requestVoteArgs, &requestVoteReply)
 			if !ok {
-				DPrintf("sendRequestVote failed")
+				// DPrintf("sendRequestVote failed")
 				return
 			}
 			rf.mu.Lock()

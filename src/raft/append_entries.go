@@ -96,7 +96,7 @@ func (rf *Raft) startSendAppendEntries(isHeartBeat bool) {
 			reply := AppendEntriesReply{}
 			ok := rf.sendAppendEntries(i, &args, &reply)
 			if !ok {
-				DPrintf("sendAppendEntriesRPC failed, %d to %d", args.LeaderId, i)
+				// DPrintf("sendAppendEntriesRPC failed, %d to %d", args.LeaderId, i)
 				return
 			}
 			rf.mu.Lock()
@@ -107,18 +107,23 @@ func (rf *Raft) startSendAppendEntries(isHeartBeat bool) {
 				rf.mu.Unlock()
 				return
 			}
-			if reply.Success && !isHeartBeat {
+			if reply.Success {
 				rf.nextIndex[i] = args.PrevLogIndex + len(args.Entries) + 1
 				rf.matchIndex[i] = args.PrevLogIndex + len(args.Entries)
-				rf.commitIndex = rf.findMaxMatchIndex()
+				DPrintf("%d nextIndex become %d,  reply.Success", i, rf.nextIndex[i])
+				majorCommit := rf.findMaxMatchIndex()
+				if rf.log[majorCommit].Term == rf.currentTerm {
+					DPrintf("-=-=-=-=-=-= Reset majorCommit : %d", majorCommit)
+					rf.commitIndex = majorCommit
+				}
 				rf.mu.Unlock()
 				return
 			}
 			if !reply.Success {
-				DPrintf("%d nextIndex--", i)
 				rf.nextIndex[i]--
+				DPrintf("%d nextIndex become %d,  reply.failed", i, rf.nextIndex[i])
 				rf.mu.Unlock()
-				rf.startSendAppendEntries(isHeartBeat)
+				// rf.startSendAppendEntries(isHeartBeat)
 				return
 			}
 			rf.mu.Unlock()
@@ -129,7 +134,7 @@ func (rf *Raft) startSendAppendEntries(isHeartBeat bool) {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	DPrintf("%d start AppendEntries at term : %d, leader : %d, leaderTerm : %d, LeaderCommit : %d,  PrevLogIndex: % d, entries : %+v",
+	DPrintf("%d start AppendEntries at term : %d, leader : %d, leaderTerm : %d, LeaderCommit : %d,  PrevLogIndex: %d, entries : %+v",
 		rf.me, rf.currentTerm, args.LeaderId, args.Term, args.LeaderCommit, args.PrevLogIndex, args.Entries)
 	reply.Term = rf.currentTerm
 	reply.Success = false
@@ -142,19 +147,32 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.currentTerm = args.Term
 	}
 	rf.refreshElectionTime()
-	if args.PrevLogIndex > len(rf.log) {
+
+	if args.PrevLogIndex >= len(rf.log) {
+		// DPrintf("b1 args.PrevLogIndex : %d, len(rf.log) : %d", args.PrevLogIndex, len(rf.log))
 		return
 	}
 	if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
-		rf.log = rf.log[args.PrevLogIndex-1:]
+		rf.log = rf.log[:args.PrevLogIndex]
+		// DPrintf("b2")
 		return
 	}
-	rf.log = append(rf.log, args.Entries...)
+	for i, entry := range args.Entries {
+		if args.PrevLogIndex+i+1 >= len(rf.log) {
+			rf.log = append(rf.log, args.Entries[i:]...)
+			break
+		}
+		if rf.log[args.PrevLogIndex+i+1].Term != entry.Term {
+			rf.log = rf.log[0 : args.PrevLogIndex+i+1]
+		}
+		rf.log[args.PrevLogIndex+i+1] = args.Entries[i]
+	}
 
 	if args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = rf.Min(args.LeaderCommit, len(rf.log)-1)
 	}
 	reply.Success = true
+	DPrintf("Finish %d args.PrevLogIndex : %d, len(rf.log) : %+v", rf.me, args.PrevLogIndex, rf.log)
 }
 
 func (rf *Raft) startApply() {
@@ -162,11 +180,11 @@ func (rf *Raft) startApply() {
 	DPrintf("%d startApply last apply : %d : current commitIndex : %d", rf.me, rf.lastApplied, rf.commitIndex)
 	defer rf.mu.Unlock()
 	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
-		DPrintf("%d apply %d", rf.me, i)
 		msg := ApplyMsg{}
 		msg.Command = rf.log[i].Command
 		msg.CommandIndex = i
 		msg.CommandValid = true
+		DPrintf("%d apply %+v", rf.me, msg)
 		rf.applyCh <- msg
 		rf.lastApplied = i
 	}
