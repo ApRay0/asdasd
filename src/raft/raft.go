@@ -69,7 +69,7 @@ type Raft struct {
 	dead             int32               // set by Kill()
 	currentTerm      int
 	voteFor          int
-	commintIndex     int
+	commitIndex      int
 	lastApplied      int
 	role             int
 	nextIndex        []int
@@ -77,11 +77,14 @@ type Raft struct {
 	log              []Log
 	nextElectionTime time.Time
 	votedGatherd     int
+	applyCh          chan ApplyMsg
 }
 
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	return rf.currentTerm, rf.role == Leader
 }
 
@@ -173,13 +176,21 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 // term. the third return value is true if this server believes it is
 // the leader.
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
+	rf.mu.Lock()
+	if rf.role != Leader {
+		rf.mu.Unlock()
+		return -1, -1, false
+	}
+	log := Log{}
+	log.Command = command
+	log.Term = rf.currentTerm
+	rf.log = append(rf.log, log)
+	appearIndex := len(rf.log) - 1
 
-	// Your code here (3B).
-
-	return index, term, isLeader
+	rf.mu.Unlock()
+	defer rf.startSendAppendEntries(false)
+	DPrintf("Start appearIndex : %d, log.Term : %d", appearIndex, log.Term)
+	return appearIndex, log.Term, true
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
@@ -217,7 +228,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.persister = persister
 	rf.me = me
 	rf.currentTerm = 0
-	rf.commintIndex = 0
+	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.role = Follower
 	rf.voteFor = -1
@@ -229,9 +240,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.refreshElectionTime()
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+	rf.applyCh = applyCh
 	// start ticker goroutine
 	go rf.electionSchedule()
 	go rf.heartBeatSchedule()
-
+	go rf.applySchedule()
 	return rf
 }

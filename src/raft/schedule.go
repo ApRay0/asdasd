@@ -11,7 +11,14 @@ func (rf *Raft) electionSchedule() {
 
 func (rf *Raft) heartBeatSchedule() {
 	for !rf.killed() {
-		rf.sendHeartBeat()
+		rf.startSendAppendEntries(true)
 		time.Sleep(rf.getSendHeartBeatTimeoutDuration())
+	}
+}
+
+func (rf *Raft) applySchedule() {
+	for !rf.killed() {
+		rf.startApply()
+		time.Sleep(rf.getApplyTimeoutDuration())
 	}
 }

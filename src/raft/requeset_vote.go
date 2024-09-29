@@ -94,7 +94,7 @@ func (rf *Raft) startElection() {
 					}
 					DPrintf("%d ============== become learder at term : %d", rf.me, rf.currentTerm)
 					rf.mu.Unlock()
-					rf.sendHeartBeat()
+					rf.startSendAppendEntries(true)
 					return
 				}
 				rf.mu.Unlock()

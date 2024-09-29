@@ -15,6 +15,11 @@ func (rf *Raft) getSendHeartBeatTimeoutDuration() time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+func (rf *Raft) getApplyTimeoutDuration() time.Duration {
+	ms := 500 + (rand.Int63() % 500)
+	return time.Duration(ms) * time.Millisecond
+}
+
 func (rf *Raft) getShortTime() time.Duration {
 	ms := 10
 	return time.Duration(ms) * time.Millisecond
@@ -34,6 +39,28 @@ func (rf *Raft) changeRole(role int) {
 		DPrintf("----------%d change role to Follower at term %d", rf.me, rf.currentTerm)
 	}
 	rf.role = role
+}
+
+func (rf *Raft) findMaxMatchIndex() int {
+	res := rf.lastApplied
+	n := len(rf.peers)
+	for res < len(rf.log) {
+		tmpCount := 1
+		for i, matchIndex := range rf.matchIndex {
+			if i == rf.me {
+				continue
+			}
+			if matchIndex >= res {
+				tmpCount++
+			}
+		}
+		if tmpCount < (n+1)/2 {
+			return res
+		}
+		res++
+	}
+	DPrintf("-=-=-=-=-=-= FindMaxMatchIndex results : %d", res-1)
+	return res - 1
 }
 
 func (rf *Raft) Min(a int, b int) int {
