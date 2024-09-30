@@ -134,8 +134,8 @@ func (rf *Raft) startSendAppendEntries(isHeartBeat bool) {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	DPrintf("%d start AppendEntries at term : %d, leader : %d, leaderTerm : %d, LeaderCommit : %d,  PrevLogIndex: %d, entries : %+v",
-		rf.me, rf.currentTerm, args.LeaderId, args.Term, args.LeaderCommit, args.PrevLogIndex, args.Entries)
+	DPrintf("%d start AppendEntries at term : %d, leader : %d, leaderTerm : %d, LeaderCommit : %d,  PrevLogIndex: %d, entries : %d",
+		rf.me, rf.currentTerm, args.LeaderId, args.Term, args.LeaderCommit, args.PrevLogIndex, len(args.Entries))
 	reply.Term = rf.currentTerm
 	reply.Success = false
 	if rf.currentTerm > args.Term {
@@ -157,22 +157,27 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// DPrintf("b2")
 		return
 	}
+
 	for i, entry := range args.Entries {
-		if args.PrevLogIndex+i+1 >= len(rf.log) {
+		currentIndex := args.PrevLogIndex + i + 1
+		if currentIndex >= len(rf.log) {
 			rf.log = append(rf.log, args.Entries[i:]...)
 			break
 		}
-		if rf.log[args.PrevLogIndex+i+1].Term != entry.Term {
-			rf.log = rf.log[0 : args.PrevLogIndex+i+1]
+		if rf.log[currentIndex].Term != entry.Term {
+			rf.log = rf.log[0:currentIndex]
+			rf.log = append(rf.log, args.Entries[i:]...)
 		}
-		rf.log[args.PrevLogIndex+i+1] = args.Entries[i]
+		rf.log[currentIndex] = args.Entries[i]
 	}
 
 	if args.LeaderCommit > rf.commitIndex {
-		rf.commitIndex = rf.Min(args.LeaderCommit, len(rf.log)-1)
+		rf.commitIndex = rf.Min(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
+		DPrintf("%d rf.commitIndex changed to : %d, leader : %d, args.LeaderCommit : %d, log len : %d",
+			rf.me, rf.commitIndex, args.LeaderId, args.LeaderCommit, len(rf.log))
 	}
 	reply.Success = true
-	DPrintf("Finish %d args.PrevLogIndex : %d, len(rf.log) : %+v", rf.me, args.PrevLogIndex, rf.log)
+	DPrintf("Finish %d args.PrevLogIndex : %d, len(rf.log) : %+v", rf.me, args.PrevLogIndex, len(rf.log))
 }
 
 func (rf *Raft) startApply() {

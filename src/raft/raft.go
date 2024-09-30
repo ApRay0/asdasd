@@ -188,7 +188,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	appearIndex := len(rf.log) - 1
 
 	rf.mu.Unlock()
-	defer rf.startSendAppendEntries(false)
+	// defer rf.startSendAppendEntries(false)
 	DPrintf("Start appearIndex : %d, log.Term : %d", appearIndex, log.Term)
 	return appearIndex, log.Term, true
 }
@@ -245,5 +245,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	go rf.electionSchedule()
 	go rf.heartBeatSchedule()
 	go rf.applySchedule()
+	go rf.appendEntriesSchedule()
 	return rf
 }

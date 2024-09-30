@@ -22,3 +22,10 @@ func (rf *Raft) applySchedule() {
 		time.Sleep(rf.getApplyTimeoutDuration())
 	}
 }
+
+func (rf *Raft) appendEntriesSchedule() {
+	for !rf.killed() {
+		rf.startSendAppendEntries(false)
+		time.Sleep(rf.getAppendEntriesTimeoutDuration())
+	}
+}

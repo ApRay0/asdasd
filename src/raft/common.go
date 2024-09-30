@@ -6,17 +6,22 @@ import (
 )
 
 func (rf *Raft) getElectionTimeoutDuration() time.Duration {
-	ms := 150 + (rand.Int63() % 300)
+	ms := 200 + (rand.Int63() % 300)
 	return time.Duration(ms) * time.Millisecond
 }
 
 func (rf *Raft) getSendHeartBeatTimeoutDuration() time.Duration {
-	ms := 100 + (rand.Int63() % 50)
+	ms := 100 + (rand.Int63() % 100)
 	return time.Duration(ms) * time.Millisecond
 }
 
 func (rf *Raft) getApplyTimeoutDuration() time.Duration {
 	ms := 500 + (rand.Int63() % 500)
+	return time.Duration(ms) * time.Millisecond
+}
+
+func (rf *Raft) getAppendEntriesTimeoutDuration() time.Duration {
+	ms := 200
 	return time.Duration(ms) * time.Millisecond
 }
 
